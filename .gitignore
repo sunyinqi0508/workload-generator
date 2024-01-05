@@ -1,0 +1,7 @@
+__pycache__
+__pycache__/**
+plan.bin
+*.swp
+.vscode
+.vscode/**
+.DS_Store

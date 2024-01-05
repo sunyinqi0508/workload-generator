@@ -14,11 +14,15 @@
 ## Visualize result (vis_plan.py):
 **Uniform high freq, skewed low freq**: `python .\main.py -a1 22 -a2 2.2 -n 10000 -d 50000 -g 100 && python .\vis_plan.py`
 ![Figure_1](/assets/Figure_1.png)
+
 **Skewed high freq, uniform low freq**: `python .\main.py -a1 1.22 -a2 22 -n 10000 -d 50000 -g 100 && python .\vis_plan.py`
 ![Figure_5](/assets/Figure_4.png)
+
 **Skewed both freq**: `python .\main.py -a1 1.5 -a2 1.1 -n 10000 -d 50000 -g 100 && python .\vis_plan.py`
 ![Figure_2](/assets/Figure_2.png)
+
 **Skewed both freq, less groups**: `python .\main.py -a1 1.5 -a2 1.5 -n 10000 -d 50000 -g 10 && python .\vis_plan.py`
 ![Figure_3](/assets/Figure_3.png)
+
 **Uniform both freq**: `python .\main.py -a1 22 -a2 22 -n 10000 -d 50000 -g 10 && python .\vis_plan.py`
 ![Figure_4](/assets/Figure_0.png)

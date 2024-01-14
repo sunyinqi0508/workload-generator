@@ -8,7 +8,7 @@
 
 ## Parameters (main.py):
   - **-g**: outer distribution (default zipf) can be gaussian (`-g gauss`) or uniform (`-g uniform`)
-  - **$a_1$(--a1) or $\mu$(--mu)**: (outer/low-pass) skewness, aka. how even are workload spread across groups, lower more skewed \(a_1\to1\): most skewed, $a_1\to+\infin$: uniform. For gaussian distribution as outer distribution, this is the std ($\mu$).
+  - **$a_1$(--a1) or $\mu$(--mu)**: (outer/low-pass) skewness, aka. how even are workload spread across groups, lower more skewed $a_1\to1$: most skewed, $a_1\to+\infty$: uniform. For gaussian distribution as outer distribution, this is the std ($\mu$).
   - **$a_2$(--a2) or --a**: (inner/high-pass) skewness, aka. how skewed data is within each group
   - **n**: number of samples
   - **granularity**: number of groups/bins (big spikes if a1 is low)

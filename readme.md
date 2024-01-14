@@ -1,7 +1,9 @@
 # Bursty workload generator
 ## How it works?
 **Workload Generation `main.py -m get`**: This script will first split workloads into *g* bins using the *outer* distribution (default is zipf, can also be gaussian or uniform). Each bin will get $w_k$ workloads and $\Sigma_{k=0}^{g}w_k = n$. Each bin will start at $offset + \frac{duration}{g}*k$ second. The inner distribution will determine the time each workload query will be issued such that $\omega_{k, i} \sim \zeta(a_2, 1)$. $\omega_{k, i}$ is then scaled to the window of the k-th bin: $w_{k, i} = offset + (\omega_{k, i} + k)*s$, where $s = \frac{duration}{g}$. Consider using uniform distribution for less extreme distribution of works per bin.
+
 **Visualization**: Use vis_plan.py to visualize the workload plan located in `./plan.bin` using a histogram.
+
 **Executing workload `main.py -m exec`**: Issuing the workload using the plan in `./plan.bin`. The workloads being issued should be provided in a queue (list) of callables.
 
 ## Parameters (main.py):

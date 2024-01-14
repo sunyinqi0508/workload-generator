@@ -3,10 +3,13 @@ from common import *
 import time
 import random
 from collections.abc import Iterable, Callable
+# TODO: !!Bug => investigate uniform low-pass not reaching 50k
 
 help_str = '''Parameters:
-  a1: (outer/low-pass) skewness, 
-  a2: (inner/high-pass) skewness, 
+  o: outer distribution, can be gaussian, zipf or uniform (default: zipf)
+  a1 (mu): (outer/low-pass) skewness for zipf, standard deviation for gaussian, discarded
+  a2 (a): (inner/high-pass) skewness, 
+  g: granularity, number of bins.(default: 10)
   n: number of samples
   duration: range of samples (in seconds)
   offset: offset of samples (delay in seconds)
@@ -25,24 +28,24 @@ def init(seed = 1):
     random.seed(time.time() + seed)
     np.random.seed(int(random.random() * time.perf_counter_ns()) % uint32_max)
     random.seed(int(np.random.random() * time.perf_counter_ns()))
-
+    
 def gen_distribution():
     global plan
-    def get_normalized_zipf(a, n, r, accumulate = np.add.accumulate):
+    def get_normalized(a, n, r, accumulate = np.add.accumulate, distribution = np.random.zipf):
         if n == 0: return np.empty(0)
-        data = np.random.zipf(a, n).astype(np.float64)
+        data = distribution(a, n).astype(np.float64)
         data /= np.sum(data)
         accumulate(data, out = data)
         data *= r
         return data
     
-    weights = get_normalized_zipf(parameters.a1, parameters.granularity, parameters.duration, lambda x, **_: x)
+    weights = get_normalized(parameters.a1, parameters.granularity, parameters.n, lambda x, **_: x, distribution_f[parameters.outer])
     np.random.shuffle(weights)
     weights = np.round(weights).astype(np.int32)
     weights[-1] = max(parameters.n - np.sum(weights[:-1]), 0)
     offsets = (np.array(range(0, parameters.granularity), dtype=np.float64)/parameters.granularity) * parameters.duration
     duration_per_segment = parameters.duration / parameters.granularity
-    plan = [k for w, off in zip(weights, offsets) for k in get_normalized_zipf(parameters.a2, w, duration_per_segment) + off]
+    plan = [k for w, off in zip(weights, offsets) for k in get_normalized(parameters.a2, w, duration_per_segment) + off]
     with open(parameters.f, 'wb') as fp:
         pickle.dump(dump_t(parameters, plan), fp)
 
@@ -81,10 +84,18 @@ def main():
     while len(argv) > 0:
         arg = argv.pop(0)
         match arg.lower().strip():
-            case '-a1' | '--a1':
+            case '-o' | '--outer':
+                match argv.pop(0).lower(): 
+                    case a if a.startswith('g') or a.startswith('n'):
+                        parameters.outer = distribution_t.normal
+                    case a if a.startswith('z'):
+                        parameters.outer = np.random.zipf
+                    case a if a.startswith('u'):
+                        parameters.outer = distribution_t.uniform
+            case '-a1' | '--a1' | '-mu' | '--mu':
                 try: parameters.a1 = float(argv.pop(0))
                 except Exception as e: print(e)
-            case '-a2' | '--a2':
+            case '-a2' | '--a2' | '-a' | '--a':
                 try: parameters.a2 = float(argv.pop(0))
                 except Exception as e: print(e)
             case '-n' | '--n':
@@ -104,7 +115,7 @@ def main():
                     match argv.pop(0).lower().strip()[:3]:
                         case 'get' | '0': 
                             parameters.mode = mode_t.get_distribution
-                        case 'gen' | '1':
+                        case 'exec' | 'issue' | 'gen' | '1':
                             parameters.mode = mode_t.generate
                         case s:
                             raise ValueError(f'Invalid mode {s}')

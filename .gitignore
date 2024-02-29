@@ -5,3 +5,7 @@ plan.bin
 .vscode
 .vscode/**
 .DS_Store
+# *.png
+main.pdf
+main.tex
+refs.bib

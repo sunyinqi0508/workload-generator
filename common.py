@@ -2,7 +2,7 @@ import numpy as np
 import scipy.stats as stats
 import pickle
 from enum import Enum, auto
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import random
 
 uint32_max = 2 ** 32 - 1
@@ -95,6 +95,7 @@ class parameters_t:
         self.shfl : float = 0
         self.mode : mode_t = mode_t.get_distribution
         self.f : str = './plan.bin'
+        self.seeds : Tuple[int, int] = (0, 0)
 
 class dump_t:
     def __init__(self, parameters : Optional[parameters_t] = None, plan : Optional[List[float]] = None):

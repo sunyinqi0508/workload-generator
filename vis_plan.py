@@ -2,12 +2,14 @@ from common import *
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os, sys, subprocess, threading
+import inspect
 
 plan : Optional[dump_t] = None
+save_root : str = './saved_plans'
 vis_parameters = {
     'bins': 1000, 
-    'vis': 0,  
-    'bw': 5.
+    'vis': 2,  
+    'bw': 2.5
 }
 
 def load_plan():
@@ -27,11 +29,12 @@ def vonmises_kde(data, kappa, n_bins=100):
     kde = np.exp(kappa*np.cos(x[:, None]-data[None, :])).sum(1)/(2*np.pi*i0(kappa))
     kde /= np.trapz(kde, x=bins)
     return bins, kde
+
 def show_plan(block = True):
     global plan
     plt.figure().canvas.mpl_connect('key_press_event', close_figure_on_escape)
-    plt.xlabel('Time point (s)')
-    plt.ylabel('Number of queries issued')
+    plt.xlabel('Time Point (s)')
+    plt.ylabel('Number of Queries Issued')
     plt.autoscale(enable=True, axis='x', tight=False)
     plt.yscale('linear')
     if switches['log']:
@@ -47,11 +50,12 @@ def show_plan(block = True):
         data = np.concatenate((data, lower_bound - data, 2*upper_bound - data))
         kde = FFTKDE(bw=bw, kernel='gaussian').fit(data)
         x, y = kde.evaluate()
-        xy = [(xx, yy) for xx, yy in zip(x, y) if lower_bound <= xx <= upper_bound]
+        xy = [(xx, yy) for xx, yy in zip(x, y) if lower_bound < xx < upper_bound]
         x, y = zip(*xy)
         y = np.array(y)
         y *= (plan.parameters.n / np.sum(y))
         plt.plot(x, y)
+        plt.scatter((0,), (0,), s = (.05, ), c = 'white')
     else:
         if vis_parameters['vis'] == 0:
             counts, _ = np.histogram(plan.plan, bins = n_bins, density=False)
@@ -60,7 +64,7 @@ def show_plan(block = True):
             from scipy.signal import savgol_filter
             from scipy.ndimage import gaussian_filter1d
             counts = savgol_filter(counts, window_length=10, polyorder=4)
-            counts = np.convolve(counts, 5, mode = 'full')
+            # counts = np.convolve(counts, 5, mode = 'full')
             counts = gaussian_filter1d(counts, 3)
             bins = np.linspace(0, plan.parameters.n, len(counts))
             plt.plot(bins, counts)
@@ -82,7 +86,7 @@ def ui_thread():
         try: plt.pause(0.1)
         except: ...
         from time import sleep
-        sleep(0.1)
+        sleep(0.01)
         if show_plan_flag < 3:
             mutex.acquire()
             try:
@@ -113,12 +117,39 @@ def save_plan(filename = None):
                 f'_a2{plan.parameters.a2}'
                 f'_b2{plan.parameters.b2}'
                 f'_s{plan.parameters.shfl}'
-                '.png')
+        )
     try:
-        plt.savefig(filename)
+        if not os.path.exists(save_root):
+            os.makedirs(save_root)
+        plt.savefig(f'{save_root}/{filename}.png')
+        with open(f'{save_root}/{filename}.bin', 'wb') as fp:
+            pickle.dump(plan, fp)
     except Exception as e:
         print(e)
-        
+
+def scale_plan(scale: float, move: float = 0, keep_range: bool = True):
+    global plan
+    def scale_impl():
+        o = plan.parameters.offset
+        d = plan.parameters.duration
+        for p in plan.plan:
+            _p = p * scale + move
+            if keep_range:
+                _p = (_p - o) % d + o
+                # if _p < o:
+                #     _p += ((o - _p - 1)//d + 1) * d
+                # elif _p > o + d:
+                #     _p -= ((_p - (o + d) - 1)//d + 1) * d
+            yield _p
+    plan.plan = list(scale_impl())
+    
+def shift_plan(shift: float, keep_range: bool = True):
+    scale_plan(1, shift, keep_range)
+
+def downsample_plan(ita: float): 
+    global plan
+    plan.plan = random.sample(plan.plan, int(len(plan.plan) * ita))
+
 def restart():
     subprocess.Popen(
         [
@@ -138,11 +169,14 @@ def vis_threaded(op = 0):
 
 commands = {
     'load': load_plan,
-    'show': lambda: vis_threaded(0),
-    'save': lambda: vis_threaded(2), 
-    'close': lambda: vis_threaded(1), 
+    'show': lambda *_: vis_threaded(0),
+    'save': lambda *_: vis_threaded(2), 
+    'close': lambda *_: vis_threaded(1), 
     'restart': restart,
-    'exit': lambda: os.abort(),
+    'exit': lambda *_: os.abort(),
+    'scale': scale_plan,
+    'shift': shift_plan, 
+    'downsample': downsample_plan,
 }
 
 flags = {
@@ -156,7 +190,7 @@ switches = {
     'log': False
 }
 
-if ('TERM_PROGRAM' in os.environ.keys() or 
+if ('TERM_PROGRAM' in os.environ.keys() or # Debugger Attached
     any('-i' in v for v in sys.argv[1:])): # Interactive mode
     print('Interactive mode')
     def exec_cmd(cmd):
@@ -179,16 +213,26 @@ if ('TERM_PROGRAM' in os.environ.keys() or
         while(True):
             cmd = input('Enter command: ')
             s_cmd = cmd.lower().strip() 
+            splits_cmd = [c.strip() for c in s_cmd.split(' ') if c.strip()]
             if s_cmd in commands:
-                try: commands[cmd]() 
+                try: commands[s_cmd]()
                 except Exception as e: print(e)
             elif ' ' in s_cmd:
-                splits_cmd = s_cmd.split(' ')
                 if splits_cmd[0] in switches and splits_cmd[1] in flags:
                     switches[splits_cmd[0]] = flags[splits_cmd[1]]
                 elif splits_cmd[0] in vis_parameters:
                     ty = type(vis_parameters[splits_cmd[0]])
                     vis_parameters[splits_cmd[0]] = ty(splits_cmd[1])
+                elif splits_cmd[0] in commands:
+                    try: 
+                        args = splits_cmd[1:]
+                        fn = commands[splits_cmd[0]]
+                        ps = inspect.signature(fn).parameters
+                        a = fn.__annotations__
+                        nop = lambda _: _ 
+                        conv = [a[p] if p in a else nop for p in ps]
+                        fn(*[c(a) for c, a in zip(conv, args)])
+                    except Exception as e: print(e)
                 else:
                     exec_cmd(cmd)
             else:

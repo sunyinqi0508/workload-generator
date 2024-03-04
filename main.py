@@ -26,10 +26,25 @@ n_threads = None
 console_debug = lambda *_, **__: None
 
 def init(seed = 1):
+    global parameters
+    import os
+    if os.path.exists('seeds'):
+        with open('seeds', 'r') as fp:
+            try:
+                seeds = tuple(int(s.strip()) for s in fp.read().split(' ') if s.strip())
+                np.random.seed(seeds[0])
+                random.seed(seeds[1])
+                parameters.seeds = seeds
+                print(f'Using random seeds {seeds}.')
+                return
+            except: pass
     random.seed(time.time() + seed)
-    np.random.seed(int(random.random() * time.perf_counter_ns()) % uint32_max)
-    random.seed(int(np.random.random() * time.perf_counter_ns()))
-    
+    npseed = int(random.random() * time.perf_counter_ns()) % uint32_max
+    np.random.seed(npseed)
+    randomseed = int(np.random.random() * time.perf_counter_ns()) 
+    random.seed(randomseed)
+    parameters.seeds = (npseed, randomseed) # save the seeds for reproducibility
+
 def controlled_shuffle(data, max_shift):
     n = len(data)
     if n < 3: return
@@ -83,7 +98,8 @@ def gen_distribution():
             window = int(parameters.b3)
             window = np.ones(window) / window
             data = np.convolve(data, window, mode = 'valid')
-        data = data / np.max(data)  
+        if data:
+            data = data / np.max(data)  
         data = np.append(data, (np.linspace(0, 1, n - sample_size) + truncnorm_01rand(1, n - sample_size)*parameters.b4))
         # data = np.sort(data)
         # if parameters.shfl > 0 and parameters.shfl <= 1:
@@ -138,6 +154,7 @@ def generate(workload : Iterable[Callable], plan_path: str):
         
 def main():
     import sys, copy
+    init()
     argv = copy.deepcopy(sys.argv)
     global parameters, console_debug
     
@@ -249,7 +266,6 @@ def main():
     console_log('Parameters:')
     for k, v in parameters.__dict__.items():
         console_log(f'    {k}: {v}')
-    init()
     if parameters.mode == mode_t.get_distribution:
         gen_distribution()
     elif parameters.mode == mode_t.generate:

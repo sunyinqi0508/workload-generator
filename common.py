@@ -74,7 +74,7 @@ distribution_name = {
     distribution_t.normal: 'normal',
     distribution_t.uniform: 'uniform',
     distribution_t.poisson: 'poisson',
-    distribution_t.inv_gaussian: 'inverse gaussian'
+    distribution_t.inv_gaussian: 'inverse_gaussian'
 }
 
 class parameters_t:

@@ -1,6 +1,5 @@
 from common import *
 import matplotlib.pyplot as plt
-import seaborn as sns
 import os, sys, subprocess, threading
 import inspect
 
@@ -12,9 +11,9 @@ vis_parameters = {
     'bw': 2.5
 }
 
-def load_plan():
+def load_plan(f = 'plan.bin'):
     global plan
-    with open('plan.bin', 'rb') as fp:
+    with open(f, 'rb') as fp:
         plan = pickle.load(fp)
         
 def close_figure_on_escape(event):
@@ -25,15 +24,20 @@ def vonmises_kde(data, kappa, n_bins=100):
     from scipy.special import i0
     bins = np.linspace(-np.pi, np.pi, n_bins)
     x = np.linspace(-np.pi, np.pi, n_bins)
-    # integrate vonmises kernels
     kde = np.exp(kappa*np.cos(x[:, None]-data[None, :])).sum(1)/(2*np.pi*i0(kappa))
     kde /= np.trapz(kde, x=bins)
     return bins, kde
 
 def show_plan(block = True):
     global plan
-    plt.figure().canvas.mpl_connect('key_press_event', close_figure_on_escape)
-    plt.xlabel('Time Point (s)')
+    plt.rcParams['text.usetex'] = False
+    plt.rcParams['font.family'] = 'serif'
+    plt.rcParams['font.size'] = 25
+    plt.rc('xtick', labelsize=16)
+    plt.rc('ytick', labelsize=16)
+    
+    plt.figure(figsize=(10, 6.5)).canvas.mpl_connect('key_press_event', close_figure_on_escape)
+    plt.xlabel('Time (s)')
     plt.ylabel('Number of Queries Issued')
     plt.autoscale(enable=True, axis='x', tight=False)
     plt.yscale('linear')
@@ -148,8 +152,11 @@ def shift_plan(shift: float, keep_range: bool = True):
 
 def downsample_plan(ita: float): 
     global plan
-    plan.plan = random.sample(plan.plan, int(len(plan.plan) * ita))
-
+    if ita < 1.:
+        plan.plan = random.sample(plan.plan, int(len(plan.plan) * ita))
+    else:
+        plan.plan = np.repeat(plan.plan, ita)
+    plan.parameters.n = len(plan.plan)
 def restart():
     subprocess.Popen(
         [
@@ -167,6 +174,24 @@ def vis_threaded(op = 0):
     show_plan_flag = op
     mutex.release()
 
+def print_plan():
+    for k, v in plan.parameters.__dict__.items():
+        print(f'{k}: {v}')
+
+def batch(batchroot: str = './batch/'):
+    try:
+        ws = [f for f in os.listdir(batchroot) if f.lower().endswith('.bin')]
+        for w in ws:
+            load_plan(batchroot + '/' + w)
+            vis_threaded(0)
+            import time
+            time.sleep(1.5)
+            vis_threaded(2)
+            time.sleep(.5)
+            
+    except Exception as e: 
+        print(e)
+
 commands = {
     'load': load_plan,
     'show': lambda *_: vis_threaded(0),
@@ -174,9 +199,11 @@ commands = {
     'close': lambda *_: vis_threaded(1), 
     'restart': restart,
     'exit': lambda *_: os.abort(),
+    'print': print_plan, 
     'scale': scale_plan,
     'shift': shift_plan, 
     'downsample': downsample_plan,
+    'batch': batch
 }
 
 flags = {
@@ -210,6 +237,10 @@ if ('TERM_PROGRAM' in os.environ.keys() or # Debugger Attached
         except Exception as e:
             print(e)
     def prompt_thread():
+        converters = {
+            bool: lambda x: x.lower().strip().startswith('t'),
+        }
+        _c = lambda x: converters.get(x, x)
         while(True):
             cmd = input('Enter command: ')
             s_cmd = cmd.lower().strip() 
@@ -230,7 +261,8 @@ if ('TERM_PROGRAM' in os.environ.keys() or # Debugger Attached
                         ps = inspect.signature(fn).parameters
                         a = fn.__annotations__
                         nop = lambda _: _ 
-                        conv = [a[p] if p in a else nop for p in ps]
+                        conv = [_c(a[p]) if p in a else nop for p in ps]
+                        print(conv, args)
                         fn(*[c(a) for c, a in zip(conv, args)])
                     except Exception as e: print(e)
                 else:
